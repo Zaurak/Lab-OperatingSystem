@@ -93,16 +93,17 @@ int main(int argc, char* argv[]) {
     initSem(semId, 1, 1);
     
     pthread_t thread[2];    // Array of threads
-
-    int iret[2];            // Array of thread return values
         
-    iret[0] = pthread_create(&thread[0], NULL, funcA, NULL);
-    iret[1] = pthread_create(&thread[1], NULL, funcB, NULL);
+    pthread_create(&thread[0], NULL, funcA, NULL);
+    pthread_create(&thread[1], NULL, funcB, NULL);
 
     // Wait until threads are all complete
     for (i = 0 ; i < 2 ; i++) {
         pthread_join(thread[i], NULL);
-    }
+    }   
     printf("This is not printed in case of deadlock\n");
+    // Free the semaphores
+    semctl(semId, 0, IPC_RMID, 0);
+    semctl(semId, 1, IPC_RMID, 0);
     return 0;
 }

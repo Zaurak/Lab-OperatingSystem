@@ -75,11 +75,9 @@ int main(int argc, char* argv[]) {
     
     pthread_t thread[N_THREAD];    // Array of threads
 
-    int iret[N_THREAD];            // Array of thread return values
-
     // Creating threads
     for (i = 0 ; i < N_THREAD ; i++) {
-        iret[i] = pthread_create(&thread[i], NULL, deposit, NULL);
+        pthread_create(&thread[i], NULL, deposit, NULL);
     }
 
     // Wait until threads are all complete
@@ -87,5 +85,6 @@ int main(int argc, char* argv[]) {
         pthread_join(thread[i], NULL);
     }
     printf("Account/N_THREAD(%d): %d\n", N_THREAD, account/N_THREAD);
+    semctl(semId, 0, IPC_RMID, 0);    // Free the semaphore
     return 0;
 }
