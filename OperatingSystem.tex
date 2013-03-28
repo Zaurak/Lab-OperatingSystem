@@ -1,0 +1,276 @@
+\documentclass[a4paper, 12pt]{article}
+
+\input{/home/zaurak/Documents/headers.tex}
+
+\begin{document}
+ 
+\title{Système d'exploitation - Lab}
+\author{Quentin \bsc{Marques}}
+
+\date{\today} 
+ 
+\maketitle
+\vfill
+\begin{abstract}
+	Ce document contient les réponses aux Travaux Pratiques/Dirigés du cours de système d'exploitation de M. Christian \bsc{Khoury}. Il contient en outre des notes de cours et des résumés de recherches internet concernant les threads, les processus, les mutexes, les conditions variables, les sémaphores, les race conditions, les deadlocks etc.
+	\newline
+	
+	L'intégralité des sources de ce document, incluant les codes sources \LaTeX et les exemples en C, ainsi que les schémas sont librement disponible et modifiable sur la page GitHub suivante :	
+	\url{https://github.com/Zaurak/Lab-OperatingSystem}
+\end{abstract}
+\vfill
+\newpage
+
+\tableofcontents
+\newpage
+
+
+\section{Threads}
+
+\subsection{Processes vs Threads}
+
+\subsubsection{Théorie}
+
+\paragraph{Process\\}
+Un \emph{processus} est un \emph{programme} (code exécutable) qui est \emph{exécuté}. La technique par laquelle un même programme s'exécute lui-même plusieurs fois (en plusieurs processus) est un \emph{fork()}. Les différents processus s'exécutent en parallèle, chacun avec son espace mémoire propre et ses ressources (même s'il est possible de définir des segments de mémoire partagés).
+
+\paragraph{Thread\\}
+Un \emph{thread} est un \emph{processus léger}. Un thread fait partie des instructions exécutées par un processus en cours. Ainsi un processus peut contenir plusieurs threads et l'on parle alors d'application \emph{multi-threadées}. Les différents threads s'exécutent quasi-simultanément sur une architecture à 1 cœur et simultanément s'il est possible de les répartir sur les différents cœurs de l'ordinateur. Les threads partagent le même espace mémoire et les même ressources, ce qui peut résulter en des problèmes divers de \emph{synchronisations}, d'\emph{accès concurrent} (race condition) ou encore d'\emph{inter-blocage} (deadlock).
+
+\subsubsection{Exercice}
+
+\paragraph{Énoncé\\}
+
+Calculer l'expression suivante:
+\[
+    (a + b) - \left[ \frac{(c*d)}{(e-f)} \right] + (g+h)
+\]
+
+En utilisant:
+\begin{itemize}
+    \item Des processes
+    \item Des threads
+\end{itemize}
+
+Quelle est la différence principale entre ces deux implémentations ?
+
+\paragraph{Solution\\}
+Nous découperons le calcul à raison d'un process/thread par groupement parenthésé. 
+Dans les deux cas nous calculerons le temps d'exécution réel grâce au framework intégré de Code::Blocks (la dernière ligne de la trace d'exécution est donc ajoutée).
+
+\subparagraph{Avec Process\\}
+
+\lstinputlisting[language=C]{Codes/compute-with-processes.c}
+
+\cmd{Codes/compute-with-processes.out}
+
+\subparagraph{Avec Threads\\}
+
+Comme toutes les variables sont différentes d'un groupement parenthésé à l'autre, aucun problème de synchronisation n'est à prévoir et l'on peut utiliser simplement la valeur de retour des threads.
+
+\lstinputlisting[language=C]{Codes/compute-with-threads.c}
+
+\cmd{Codes/compute-with-threads.out}
+
+\subparagraph{Conclusion\\}
+
+On constate que les threads sont plus rapide que les processus car ces premiers n'ont pas à copier l'intégralité du contexte d'exécution les précédant. Cependant, ces tests sont peu représentatifs car sur de courtes durées de calculs.
+
+\subsection{Synchronizing Threads}
+
+\subsubsection{Théorie}
+
+\paragraph{Les techniques de synchronisation\\}
+
+Il existe 3 moyens de synchroniser des threads entre eux:
+\begin{itemize}
+	\item mutexes: \emph{Vérrous} d'exclusion mutuelle. 
+	
+	\item joins: Attendre qu'un thread spécifié \emph{rejoigne} le flux du thread appelant. 
+
+	\item condition variables: Céder la main à d'autre threads tant qu'un signal n'a pas été reçu.
+
+\end{itemize}
+
+\subparagraph{Mutex\\}
+
+Le \emph{mutex} empêche, une fois vérrouiller, tout autre thread de modifier les variables utilisés entre le vérrouillage et le déverrouillage.
+	Toute tentative de modification par un thread d'une variable verrouiller par un mutex entraînera un blocage de ce thread le temps que le mutex soit déverrouiller.
+	
+La section de code ainsi "protégé" par un mutex est appelé \emph{section critique}.	
+	
+\lstinputlisting[language=C]{Codes/snippet-mutex.c}
+
+\cmd{Codes/snippet-mutex.out}
+
+Dans le premier lancement, nous avons \emph{thread1} qui est plus rapide et verrouille la ressource \emph{value} pour son usage.
+Dans le second lancement, c'est l'inverse.
+
+En aucun cas nous n'aurions pu avoir:
+\cmd{Codes/snippet-mutex-impossible.out}
+
+\subparagraph{Join\\}
+
+Le \emph{join} attend que le thread spécifié ait pu terminé avant de redonner la main à la fonction appelante. C'est notamment très utile pour s'assurer que le travail d'un thread a bien été effectué avant d'entamer une autre tâche dépendant du résultat de ce thread. Dans l'exemple précédent, nous l'avons utilisé pour attendre la fin de tout les threads mais on peux également l'utiliser pour d'autres tâches de synchronisation.
+
+Dans le code suivant, on effectue une moyenne en divisant la somme dans deux threads:
+\begin{flalign*}
+    Somme & = \sum_{i = 0}^{N} \text{array[$i$]} 
+          = \underbrace{\sum_{j = 0}^{N/2} \text{array[$j$]}}_{\text{Thread 1}} 
+          + \underbrace{\sum_{k = N/2}^{N} \text{array[$k$]}}_{\text{Thread 2}} \\
+\end{flalign*}
+
+\lstinputlisting[language=C]{Codes/snippet-join.c}
+
+\cmd{Codes/snippet-join.out}
+
+	
+\subparagraph{Condition variables\\}
+
+Les \emph{condition variables} sont des verrous conditionnels. Un thread qui attend qu'une condition soit réalisé cède alors la main (et déverrouille son mutex) au profit des autres threads. Un thread qui remplit la condition enverra alors un signal à ce thread pour l'avertir qu'il peux arrêter d'attendre et récupérer son verrou.
+
+\lstinputlisting[language=C]{Codes/snippet-condvar.c}
+
+\cmd{Codes/snippet-condvar.out}
+
+\subsubsection{Exercice}
+
+\paragraph{Énoncé\\}
+
+Créer 3 threads; 2 d'entre eux incrémenteront un compteur partagé pendant que le troisième attends que le compteur atteigne un montant donné.
+Implémenter ce simple exercice en utilisant les threads avec les \emph{conditions variables}
+
+\paragraph{Solution\\}
+
+\lstinputlisting[language=C]{Codes/syncthreads.c}
+
+\cmd{Codes/syncthreads.out}
+
+\section{Interprocess Communication}
+
+\subsection{Shared Memory and Race Problems}
+
+\subsubsection{Théorie}
+
+\paragraph{Mémoires partagées\\}
+Nous avons déjà vu dans la partie 1.1.2 un code exploitant les différentes techniques de création d'espaces mémoire partagés pour les processus. A titre de rappel, voici les quelques fonctions utiles à connaître:
+
+\lstinputlisting[language=C]{Codes/snippet-shared-memory.c}
+
+\paragraph{Accès concurrent\\}
+
+Une \emph{race condition} peut arriver quand l'on tente d'accéder en écriture (ou en lecture) simultanément à une même ressource. Une des modifications peut alors ne pas être prise en compte ou résulter en comportement incohérent et imprévisible (Voir \reffig{race-condition}). Dans l'exercice suivant, on simulera un tel accès concurrent pour mettre en évidence le problème.
+
+\fig{race-condition}
+{Exemple d'incohérence dû à un accès concurrent}
+
+Il est possible d'éviter ce genre de problèmes en utilisant les techniques de synchronisation vues précédemment, notamment les \emph{mutexes}. Cependant, ces techniques peuvent engendrées d'autres problèmes...
+
+\paragraph{Inter-blocage\\}
+
+Un problème lié à l'utilisation des techniques de synchronisation (mutex, join et condition variable) est l'apparition de situation d'\emph{inter-blocage} (deadlock). Ceci peut arriver dans plusieurs situations notamment:
+\begin{enumerate}
+    \item Quand un thread/process tente de verrouiller une ressource déjà verrouillé par un second thread/process et que le premier thread/process est déjà en train de verrouiller une ressource requise par le second. Le premier attendra indéfiniment que le second libère le verrou mais comme celui-ci requière une ressource elle-même verrouiller par le premier, cela n'arrivera jamais (Voir \reffig{deadlock-mutex}. On corrige ce type de problèmes en :
+    \fig{deadlock-mutex}
+    {Problème d'inter-blocage dû aux verrous exclusifs}
+    \begin{itemize}
+        \item Définissant un ordre fixe d'utilisation des ressources quels que soient les threads/processes utilisés. Ceci assure que les ressources seront verrouillées dans cet ordre et déverrouillées dans l'ordre inverse (Voir \reffig{deadlock-mutex-fix}).
+        \item Vérifiant que le verrou peut être mis grâce à \verb?pthread_mutex_trylock()?. Le thread/process n'est alors pas "bloqué" et l'on peut éventuellement prendre une décision pour gérer l'erreur (attendre un temps aléatoirement long par exemple). Reste à ne pas tomber dans l'autre extrême qui serait de définir tout code parallélisé comme étant verrouillé par un verrou exclusif. Cela casserait l'intérêt de la parallélisation. Les verrous ne devrait être utilisés que sur des sections critiques aussi petites que possible.
+    \end{itemize}
+    \fig{deadlock-mutex-fix}
+    {Exemple de résolution du problème des \emph{deadlocks} dû aux mutexes}
+    \item Quand un thread/process attend sur une \emph{condition variable} un signal qui soit a déjà été envoyé avant que le thread/process puisse être en position d'attente, soit que la modification de la condition variable entraîne une \emph{race condition} (Voir \reffig{deadlock-cond}. On corrige ce type de problèmes en :
+    \fig{deadlock-cond}
+    {Problème d'inter-blocage dû aux conditions variables}
+    \begin{itemize}
+        \item Entourant le \verb?pthread_cond_wait()? par un verrou exclusif (mutex) entre le code "attendant" et celui "signalant". Ainsi on a l'assurance qu'une fois le thread lancé celui-ci aura le temps d'arriver à la condition d'attente sans recevoir de manière prématurée le signal (voir \reffig{deadlock-cond-fix}). 
+        \item Vérifiant avant de déclencher l'attente du signal que la condition n'est pas déjà remplie.
+    \end{itemize}
+    \fig{deadlock-cond-fix}
+    {Exemple de résolution du problème des \emph{deadlocks} dû aux conditions variables}
+\end{enumerate}
+
+\subsubsection{Exercice}
+
+\paragraph{Énoncé\\}
+Mettez en évidence par la simulation une situation d'accès concurrent.
+
+\paragraph{Solution\\}
+Dans un but de clarté du code, nous utiliserons ici des threads plutôt que des processus. En effet, avec des threads nous n'aurons pas besoin de réaliser la syntaxe lourde de gestion des processus enfants (niveaux d'indentation) ainsi que la gestion des segments de mémoires partagées déjà traités auparavant.
+
+Le code suivant simule un accès concurrent de $N$ threads de gestion bancaire, chacun augmentant le solde d'un compte par tranche de $10 \euro$  jusqu'à atteindre $ 100 \euro$. Nous devrions donc obtenir à la fin un solde de $N*100 \euro$ sans compter sur les incohérences liés aux accès concurrents.
+
+\lstinputlisting[language=C]{Codes/simul-race-condition.c}
+
+\cmd{Codes/simul-race-condition.out}
+
+Après de multiples exécution de ce programme, on constate que les valeurs de retours sont complètement inconsistantes (oscillant entre 75 et 99).
+
+\subsection{Synchronizing access using semaphores}
+
+Dans cette partie, nous allons essayer d'implémenter le concept de verrou d'exclusion mutuelle à l'aide de \emph{sémaphores}. Il est très intéressant d'utiliser les sémaphores pour un tel usage car le concept de mutex ne s'applique pas directement au cas des processus (chaque processus ayant ses propres ressources, mutex inclus, ceux-ci sont sans effet sur les accès concurrents sur un segment de mémoire partagé entre processus).
+
+Notez que nous implémenterons à l'aide de sémaphores mais sur des threads plutôt que des processus dans le même soucis de lisibilité que précédemment.
+
+\subsubsection{Théorie}
+
+\paragraph{Définition\\}
+
+Nous utiliserons ici les \emph{sémaphores Système V}, permettant - au contraire des sémaphores classiques - de fonctionner entre deux processus différents.
+
+Un sémaphore est une variable et constitue une méthode couramment utilisée pour synchroniser la mémoire lors d'une exécution parallélisée. 
+
+Leur utilisation logicielle est permise par une implémentation matérielle (au niveau du microprocesseur), permettant de tester et modifier la variable protégée au cours d'un \emph{cycle insécable}.
+
+\paragraph{Opérations P et V\\}
+
+P et V du néerlandais Proberen et Verhogen signifient tester et incrémenter. En français, on s'en souviendra plutôt par "Puis-je ?"/"Prendre" et "Vas-y !"/"Vendre".
+
+Concrètement, une sémaphore contient une valeur correspondant au nombre de ressources disponibles. Dans le cas d'une ressource unique, cette valeur peut être :
+\begin{itemize}
+    \item[\textbullet] $0$ : Ressource non-disponible
+    \item[\textbullet] $1$ : Ressource disponible
+\end{itemize}
+
+L'opération P va tenter de décrémenter la valeur de la sémaphore ("Puis-je ?"). Si cette valeur ne peut pas être décrémentée sans tomber sous $0$ alors P attend qu'une augmentation de la valeur de la sémaphore déclenche un nouveau test de sa part.
+
+L'opération V quant à elle va incrémenter la valeur de la sémaphore ("Vas-y !"). En augmentant le nombre de ressources disponibles, elle indique du même coup à toute opération P en attente que ce qui était en attente peut désormais reprendre.
+
+\subsubsection{Exercice}
+
+\paragraph{Énoncé\\}
+
+\begin{enumerate}
+    \item Utilisez les sémaphores pour assurer une exclusion mutuelle.
+        \begin{enumerate}                
+	        \item Implémentez les fonctions suivantes :
+		        \begin{enumerate}
+		            \item \verb?initSem? initialisant une sémaphore
+		            \item \verb?P? acquérant une ressource
+		            \item \verb?V? libérant une ressource
+		        \end{enumerate}
+	        \item Utilisez \verb?P? et \verb?V? pour assurer une exclusion mutuelle et résoudre le problème d'accès concurrentiel dans l'exercice précédent.
+        \end{enumerate}
+    \item Utilisez les sémaphores pour créer une situation d'inter-blocage.
+\end{enumerate}
+
+\paragraph{Solution\\}
+\subparagraph{Sémaphores - Verrous d'exclusion mutuelle\\}
+Ce code permet de corriger une situation similaire à celle exposée en \reffig{race-condition}.
+
+\lstinputlisting[language=C]{Codes/semaphore-mutual-exclusion.c}
+
+\cmd{Codes/semaphore-mutual-exclusion.out}
+
+Le problème d'accès concurrent a été réglé.
+
+\subparagraph{Sémaphores - Simulation d'inter-blocage\\}
+Le code suivant simule une situation d'inter-blocage similaire à celle exposée en \reffig{deadlock-mutex} mais avec des sémaphores plutôt que des mutexes.
+
+\lstinputlisting[language=C]{Codes/semaphore-deadlock.c}
+
+\cmd{Codes/semaphore-deadlock.out}
+
+Nous sommes obligé d'interrompre le programme pour l'empêcher d'attendre indéfiniment.
+
+\end{document}
